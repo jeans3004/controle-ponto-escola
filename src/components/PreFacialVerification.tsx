@@ -97,47 +97,82 @@ export default function PreFacialVerification({ onVerificationComplete, onSkip }
   }, [])
 
   const confirmPhoto = useCallback(async () => {
-    console.log('💾 Confirmando e enviando foto...')
-    if (!capturedPhoto || !session?.user?.email) return
+  console.log('💾 Confirmando e enviando foto...')
+  if (!capturedPhoto || !session?.user?.email) {
+    console.error('❌ Dados faltando:', { 
+      temFoto: !!capturedPhoto, 
+      temEmail: !!session?.user?.email 
+    })
+    setError('Dados da sessão não encontrados. Tente fazer login novamente.')
+    return
+  }
 
-    setUploading(true)
-    setError('')
+  setUploading(true)
+  setError('')
 
-    try {
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+  try {
+    console.log('📤 Preparando dados para envio...')
+    console.log('👤 Usuário:', session.user.email, session.user.name)
+    console.log('📸 Tamanho da foto:', capturedPhoto.length)
 
-      console.log('📤 Enviando foto para servidor...')
-      const response = await fetch('/api/upload-photo', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          photoData: capturedPhoto,
-          userEmail: session.user.email,
-          userName: session.user.name,
-          verificationType: 'inicial'
-        })
-      })
-
-      const result = await response.json()
-      console.log('📥 Resposta do servidor:', result)
-
-      if (response.ok) {
-        console.log('✅ Upload bem-sucedido!')
-        stopCamera()
-        onVerificationComplete()
-      } else {
-        console.error('❌ Erro no upload:', result.error)
-        setError(result.error || 'Erro ao fazer upload da foto')
-      }
-    } catch (err) {
-      console.error('❌ Erro no upload:', err)
-      setError('Erro ao enviar foto. Tente novamente.')
-    } finally {
-      setUploading(false)
+    const payload = {
+      photoData: capturedPhoto,
+      userEmail: session.user.email,
+      userName: session.user.name,
+      verificationType: 'inicial'
     }
-  }, [capturedPhoto, session, stopCamera, onVerificationComplete])
+
+    console.log('📡 Enviando requisição para /api/upload-photo...')
+    
+    const response = await fetch('/api/upload-photo', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload)
+    })
+
+    console.log('📥 Status da resposta:', response.status, response.statusText)
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('❌ Erro HTTP:', response.status, errorText)
+      
+      try {
+        const errorJson = JSON.parse(errorText)
+        setError(errorJson.error || `Erro ${response.status}: ${response.statusText}`)
+      } catch {
+        setError(`Erro ${response.status}: ${errorText || response.statusText}`)
+      }
+      return
+    }
+
+    const result = await response.json()
+    console.log('✅ Resposta do servidor:', result)
+
+    if (result.success) {
+      console.log('🎉 Upload bem-sucedido!')
+      stopCamera()
+      onVerificationComplete()
+    } else {
+      console.error('❌ Servidor retornou erro:', result.error)
+      setError(result.error || 'Erro desconhecido do servidor')
+    }
+
+  } catch (err: any) {
+    console.error('❌ Erro na requisição:', err)
+    
+    if (err.name === 'TypeError' && err.message.includes('fetch')) {
+      setError('Erro de conexão. Verifique sua internet e tente novamente.')
+    } else if (err.name === 'SyntaxError') {
+      setError('Erro ao processar resposta do servidor.')
+    } else {
+      setError(`Erro técnico: ${err.message}`)
+    }
+  } finally {
+    setUploading(false)
+  }
+}, [capturedPhoto, session, stopCamera, onVerificationComplete])
 
   const retakePhoto = useCallback(() => {
     console.log('🔄 Refazendo foto...')

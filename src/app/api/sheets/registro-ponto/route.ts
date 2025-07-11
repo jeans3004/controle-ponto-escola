@@ -1,7 +1,10 @@
+// src/app/api/sheets/registro-ponto/route.ts - Versão Corrigida
+
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { google } from 'googleapis'
+import { JWT } from 'google-auth-library'
 
 // Função para calcular distância entre coordenadas
 function calcularDistancia(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -19,19 +22,31 @@ function calcularDistancia(lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c
 }
 
-// Função para validar localização
-function validarLocalizacao(userLat: number, userLon: number): boolean {
-  const escolaLat = parseFloat(process.env.ESCOLA_LATITUDE || '-3.1234567')
-  const escolaLon = parseFloat(process.env.ESCOLA_LONGITUDE || '-60.1234567')
-  const raioPermitido = parseInt(process.env.ESCOLA_RAIO_METROS || '100')
+// Função para validar localização (com logs detalhados)
+function validarLocalizacao(userLat: number, userLon: number): { valido: boolean, distancia: number, detalhes: string } {
+  const escolaLat = parseFloat(process.env.ESCOLA_LATITUDE || '-3.1190275')
+  const escolaLon = parseFloat(process.env.ESCOLA_LONGITUDE || '-60.0218038')
+  const raioPermitido = parseInt(process.env.ESCOLA_RAIO_METROS || '50')
 
   const distancia = calcularDistancia(userLat, userLon, escolaLat, escolaLon)
-  console.log(`Distância calculada: ${distancia}m, Raio permitido: ${raioPermitido}m`)
+  const valido = distancia <= raioPermitido
   
-  return distancia <= raioPermitido
+  const detalhes = `
+    Usuário: ${userLat.toFixed(6)}, ${userLon.toFixed(6)}
+    Escola: ${escolaLat.toFixed(6)}, ${escolaLon.toFixed(6)}
+    Distância: ${Math.round(distancia)}m
+    Raio permitido: ${raioPermitido}m
+    Status: ${valido ? 'PERMITIDO' : 'BLOQUEADO'}
+  `
+  
+  console.log('=== VALIDAÇÃO DE LOCALIZAÇÃO ===')
+  console.log(detalhes)
+  console.log('=================================')
+  
+  return { valido, distancia: Math.round(distancia), detalhes }
 }
 
-// Função para obter cliente autenticado do Google Sheets
+// Função para obter cliente autenticado do Google Sheets (tipagem corrigida)
 async function getAuthenticatedSheets() {
   const auth = new google.auth.GoogleAuth({
     credentials: {
@@ -41,8 +56,8 @@ async function getAuthenticatedSheets() {
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   })
 
-  const authClient = await auth.getClient()
-  return google.sheets({ version: 'v4', auth: authClient as any })
+  const authClient = await auth.getClient() as JWT
+  return google.sheets({ version: 'v4', auth: authClient })
 }
 
 // Função para buscar registro do dia atual
@@ -91,16 +106,20 @@ export async function POST(request: NextRequest) {
     const { tipo, latitude, longitude } = body
 
     // Validar dados obrigatórios
-    if (!tipo || !latitude || !longitude) {
+    if (!tipo || latitude === undefined || longitude === undefined) {
       return NextResponse.json({ 
         error: 'Dados obrigatórios: tipo, latitude, longitude' 
       }, { status: 400 })
     }
 
-    // Validar localização
-    if (!validarLocalizacao(latitude, longitude)) {
+    // Validar localização com detalhes
+    const validacao = validarLocalizacao(latitude, longitude)
+    
+    if (!validacao.valido) {
       return NextResponse.json({ 
-        error: 'Você não está na localização da escola' 
+        error: `Você não está na localização da escola. Distância: ${validacao.distancia}m (máximo: ${process.env.ESCOLA_RAIO_METROS || 50}m)`,
+        distancia: validacao.distancia,
+        detalhes: validacao.detalhes
       }, { status: 403 })
     }
 
@@ -121,7 +140,6 @@ export async function POST(request: NextRequest) {
         }, { status: 400 })
       }
 
-      // Inserir nova linha
       await sheets.spreadsheets.values.append({
         spreadsheetId: process.env.GOOGLE_SHEETS_ID!,
         range: 'registros_ponto!A:G',
@@ -132,7 +150,7 @@ export async function POST(request: NextRequest) {
             session.user.name,
             data,
             hora,
-            '', // saída vazia
+            '',
             latitude,
             longitude
           ]]
@@ -141,8 +159,9 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({ 
         success: true, 
-        message: 'Entrada registrada com sucesso',
-        hora 
+        message: `Entrada registrada com sucesso (${validacao.distancia}m da escola)`,
+        hora,
+        distancia: validacao.distancia
       })
 
     } else if (tipo === 'saida') {
@@ -158,7 +177,6 @@ export async function POST(request: NextRequest) {
         }, { status: 400 })
       }
 
-      // Atualizar linha existente com horário de saída
       await sheets.spreadsheets.values.update({
         spreadsheetId: process.env.GOOGLE_SHEETS_ID!,
         range: `registros_ponto!E${registroExistente.rowIndex}`,
@@ -170,8 +188,9 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({ 
         success: true, 
-        message: 'Saída registrada com sucesso',
-        hora 
+        message: `Saída registrada com sucesso (${validacao.distancia}m da escola)`,
+        hora,
+        distancia: validacao.distancia
       })
     }
 

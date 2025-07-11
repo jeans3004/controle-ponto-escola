@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { google } from 'googleapis'
+import { JWT } from 'google-auth-library'
 
 async function getAuthenticatedSheets() {
   const auth = new google.auth.GoogleAuth({
@@ -12,8 +13,8 @@ async function getAuthenticatedSheets() {
     scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
   })
 
-  const authClient = await auth.getClient()
-  return google.sheets({ version: 'v4', auth: authClient as any })
+  const authClient = await auth.getClient() as JWT
+  return google.sheets({ version: 'v4', auth: authClient })
 }
 
 export async function GET() {

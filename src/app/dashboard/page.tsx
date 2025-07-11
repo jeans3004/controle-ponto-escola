@@ -39,9 +39,6 @@ export default async function Dashboard() {
         {/* Interface de Ponto */}
         <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
           <ModernPontoInterface />
-
-           {/* Debug temporário - remover depois */}
-          <DebugLocation />
         </div>
 
         {/* Rodapé com logout */}

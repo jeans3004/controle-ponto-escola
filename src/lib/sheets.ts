@@ -1,6 +1,6 @@
 import { google } from 'googleapis'
 
-const sheets = google.sheets('v4')
+
 
 async function getAuthenticatedSheets() {
   const auth = new google.auth.GoogleAuth({
@@ -17,8 +17,8 @@ async function getAuthenticatedSheets() {
 
 export async function validateUserEmail(email: string): Promise<boolean> {
   try {
-    const sheets = await getAuthenticatedSheets()
-    const response = await sheets.spreadsheets.values.get({
+    const sheetsClient = await getAuthenticatedSheets()
+    const response = await sheetsClient.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEETS_ID!,
       range: 'usuarios_autorizados!A:A',
     })
@@ -31,20 +31,25 @@ export async function validateUserEmail(email: string): Promise<boolean> {
   }
 }
 
-export async function getRegistroHoje(email: string): Promise<any> {
+export async function getRegistroHoje(email: string) {
   try {
-    const sheets = await getAuthenticatedSheets()
+    const sheetsClient = await getAuthenticatedSheets()
     const hoje = new Date().toISOString().split('T')[0]
     
-    const response = await sheets.spreadsheets.values.get({
+    const response = await sheetsClient.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEETS_ID!,
       range: 'registros_ponto!A:G',
     })
 
     const rows = response.data.values || []
-    const registro = rows.find(row => row[0] === email && row[2] === hoje)
+    const registro = rows.find((row, index) => 
+      index > 0 && row[0] === email && row[2] === hoje
+    )
     
     return registro ? {
+      rowIndex: rows.findIndex((row, index) => 
+        index > 0 && row[0] === email && row[2] === hoje
+      ) + 1,
       email: registro[0],
       nome: registro[1],
       data: registro[2],
@@ -56,50 +61,5 @@ export async function getRegistroHoje(email: string): Promise<any> {
   } catch (error) {
     console.error('Erro ao buscar registro:', error)
     return null
-  }
-}
-
-export async function registrarPonto(dados: {
-  email: string
-  nome: string
-  tipo: 'entrada' | 'saida'
-  latitude: number
-  longitude: number
-}): Promise<boolean> {
-  try {
-    const sheets = await getAuthenticatedSheets()
-    const agora = new Date()
-    const data = agora.toISOString().split('T')[0]
-    const hora = agora.toTimeString().split(' ')[0]
-
-    const registroExistente = await getRegistroHoje(dados.email)
-    
-    if (dados.tipo === 'entrada' && !registroExistente) {
-      // Inserir nova linha
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: process.env.GOOGLE_SHEETS_ID!,
-        range: 'registros_ponto!A:G',
-        valueInputOption: 'RAW',
-        requestBody: {
-          values: [[
-            dados.email,
-            dados.nome,
-            data,
-            hora,
-            '',
-            dados.latitude,
-            dados.longitude
-          ]]
-        }
-      })
-    } else if (dados.tipo === 'saida' && registroExistente) {
-      // Atualizar linha existente com horário de saída
-      // Implementar lógica de atualização
-    }
-
-    return true
-  } catch (error) {
-    console.error('Erro ao registrar ponto:', error)
-    return false
   }
 }

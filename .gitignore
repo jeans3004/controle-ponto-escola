@@ -41,3 +41,5 @@ next-env.d.ts
 
 # Arquivos específicos do projeto
 google-service-account.json
+# Local Netlify folder
+.netlify

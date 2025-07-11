@@ -2,8 +2,16 @@
 
 import { useState } from 'react'
 
+interface LocationData {
+  latitude: number
+  longitude: number
+  accuracy: number
+  timestamp: string
+  distanciaEscola?: number
+}
+
 export default function DebugLocation() {
-  const [location, setLocation] = useState<any>(null)
+  const [location, setLocation] = useState<LocationData | null>(null)
   const [error, setError] = useState('')
 
   const testLocation = () => {
@@ -18,12 +26,12 @@ export default function DebugLocation() {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude, accuracy } = position.coords
-        setLocation({
+        const locationData: LocationData = {
           latitude,
           longitude,
           accuracy,
           timestamp: new Date().toLocaleString()
-        })
+        }
         
         // Calcular distância para a escola (usando valores do .env)
         const escolaLat = -3.1190275 // Substitua pelo valor real
@@ -41,7 +49,8 @@ export default function DebugLocation() {
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
         const distance = R * c
 
-        setLocation(prev => ({ ...prev, distanciaEscola: Math.round(distance) }))
+        locationData.distanciaEscola = Math.round(distance)
+        setLocation(locationData)
       },
       (err) => {
         setError(`Erro: ${err.message}`)

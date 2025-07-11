@@ -12,7 +12,7 @@ interface StatusPonto {
 }
 
 export default function ModernPontoInterface() {
-  const { data: session } = useSession()
+  const { } = useSession()
   const [status, setStatus] = useState<StatusPonto | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -101,14 +101,18 @@ export default function ModernPontoInterface() {
       } else {
         setError(data.error || 'Erro ao registrar ponto')
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Erro:', err)
-      if (err.message.includes('User denied')) {
-        setError('Permita o acesso à localização para continuar')
-      } else if (err.message.includes('Timeout')) {
-        setError('Tempo limite para obter localização. Tente novamente.')
+      if (err instanceof Error) {
+        if (err.message.includes('User denied')) {
+          setError('Permita o acesso à localização para continuar')
+        } else if (err.message.includes('Timeout')) {
+          setError('Tempo limite para obter localização. Tente novamente.')
+        } else {
+          setError('Erro ao obter localização. Verifique se o GPS está ativo.')
+        }
       } else {
-        setError('Erro ao obter localização. Verifique se o GPS está ativo.')
+        setError('Erro desconhecido ao obter localização')
       }
     } finally {
       setLoading(false)

@@ -1,4 +1,4 @@
-import NextAuth, { NextAuthOptions } from 'next-auth'
+import { NextAuthOptions } from 'next-auth'
 import GoogleProvider from 'next-auth/providers/google'
 import { google } from 'googleapis'
 
@@ -37,8 +37,8 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async signIn({ user, account, profile }) {
-      if (account?.provider === 'google' && user.email) {
+    async signIn({ user }) {
+      if (user.email) {
         const isAuthorized = await validateUserEmail(user.email)
         if (!isAuthorized) {
           console.log(`Email não autorizado: ${user.email}`)
@@ -48,10 +48,10 @@ export const authOptions: NextAuthOptions = {
       }
       return false
     },
-    async session({ session, token }) {
+    async session({ session }) {
       return session
     },
-    async jwt({ token, user }) {
+    async jwt({ token }) {
       return token
     },
   },

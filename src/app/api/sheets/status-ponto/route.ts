@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { google } from 'googleapis'
@@ -13,7 +13,7 @@ async function getAuthenticatedSheets() {
   })
 
   const authClient = await auth.getClient()
-  return google.sheets({ version: 'v4', auth: authClient })
+  return google.sheets({ version: 'v4', auth: authClient as any })
 }
 
 export async function GET() {

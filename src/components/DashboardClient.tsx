@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Session } from 'next-auth'
 import ModernPontoInterface from '@/components/ModernPontoInterface'
+import PreFacialVerification from '@/components/PreFacialVerification'
 import FacialRecognition from '@/components/FacialRecognition'
 import LogoutButton from '@/components/LogoutButton'
 
@@ -11,20 +12,46 @@ interface DashboardClientProps {
 }
 
 export default function DashboardClient({ session }: DashboardClientProps) {
-  const [showFacialRecognition, setShowFacialRecognition] = useState(false)
+  const [currentStep, setCurrentStep] = useState<'pre-facial' | 'dashboard' | 'ponto-facial'>('pre-facial')
   const [pendingPontoData, setPendingPontoData] = useState<any>(null)
+
+  // Verificar se usuário já fez verificação facial hoje
+  useEffect(() => {
+    checkDailyVerification()
+  }, [])
+
+  const checkDailyVerification = async () => {
+    try {
+      const response = await fetch('/api/check-daily-verification')
+      const result = await response.json()
+      
+      if (result.verified) {
+        // Usuário já fez verificação facial hoje, ir direto para dashboard
+        setCurrentStep('dashboard')
+      }
+    } catch (error) {
+      console.log('Erro ao verificar verificação diária, prosseguindo com verificação')
+      // Em caso de erro, manter verificação por segurança
+    }
+  }
+
+  // Função chamada quando verificação prévia é completa
+  const handlePreVerificationComplete = () => {
+    console.log('✅ Verificação prévia completa, indo para dashboard')
+    setCurrentStep('dashboard')
+  }
 
   // Função chamada quando usuário tenta registrar ponto
   const handlePontoAttempt = (pontoData: any) => {
     console.log('🎯 Dashboard: Recebido pedido de ponto:', pontoData)
     setPendingPontoData(pontoData)
-    setShowFacialRecognition(true)
+    setCurrentStep('ponto-facial')
   }
 
-  // Função chamada quando foto é capturada com sucesso
-  const handlePhotoSuccess = async (photoFileId: string) => {
-    console.log('📸 Dashboard: Foto capturada, registrando ponto...', photoFileId)
-    setShowFacialRecognition(false)
+  // Função chamada quando foto do ponto é capturada
+  const handlePontoPhotoSuccess = async (photoFileId: string) => {
+    console.log('📸 Dashboard: Foto do ponto capturada, registrando...', photoFileId)
+    setCurrentStep('dashboard')
 
     try {
       const response = await fetch('/api/sheets/registro-ponto', {
@@ -40,7 +67,7 @@ export default function DashboardClient({ session }: DashboardClientProps) {
       
       if (response.ok) {
         alert(`✅ ${result.message}`)
-        window.location.reload() // Recarregar para atualizar status
+        window.location.reload()
       } else {
         alert(`❌ ${result.error}`)
       }
@@ -52,10 +79,10 @@ export default function DashboardClient({ session }: DashboardClientProps) {
     setPendingPontoData(null)
   }
 
-  // Função para pular verificação facial (opcional)
-  const handleSkipFacial = async () => {
-    console.log('⏭️ Dashboard: Pulando verificação facial')
-    setShowFacialRecognition(false)
+  // Função para pular verificação facial do ponto
+  const handleSkipPontoFacial = async () => {
+    console.log('⏭️ Dashboard: Pulando verificação facial do ponto')
+    setCurrentStep('dashboard')
     
     try {
       const response = await fetch('/api/sheets/registro-ponto', {
@@ -80,17 +107,33 @@ export default function DashboardClient({ session }: DashboardClientProps) {
     setPendingPontoData(null)
   }
 
-  // Se está mostrando reconhecimento facial
-  if (showFacialRecognition) {
+  // Função para pular verificação prévia
+  const handleSkipPreVerification = () => {
+    console.log('⏭️ Dashboard: Pulando verificação prévia')
+    setCurrentStep('dashboard')
+  }
+
+  // Tela de verificação facial prévia
+  if (currentStep === 'pre-facial') {
     return (
-      <FacialRecognition 
-        onSuccess={handlePhotoSuccess}
-        onSkip={handleSkipFacial}
+      <PreFacialVerification 
+        onVerificationComplete={handlePreVerificationComplete}
+        onSkip={handleSkipPreVerification}
       />
     )
   }
 
-  // Dashboard normal
+  // Tela de verificação facial para ponto
+  if (currentStep === 'ponto-facial') {
+    return (
+      <FacialRecognition 
+        onSuccess={handlePontoPhotoSuccess}
+        onSkip={handleSkipPontoFacial}
+      />
+    )
+  }
+
+  // Dashboard principal
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
       <div className="max-w-md mx-auto">
@@ -110,12 +153,12 @@ export default function DashboardClient({ session }: DashboardClientProps) {
             </p>
             <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
               <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-              Online
+              Verificado ✓
             </div>
           </div>
         </div>
 
-        {/* Interface de Ponto com Verificação Facial */}
+        {/* Interface de Ponto */}
         <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
           <ModernPontoInterface onPontoAttempt={handlePontoAttempt} />
         </div>
@@ -124,7 +167,7 @@ export default function DashboardClient({ session }: DashboardClientProps) {
         <div className="bg-white rounded-2xl shadow-sm p-4">
           <div className="flex items-center justify-between">
             <div className="text-xs text-gray-500">
-              🔒 Sistema com verificação facial
+              🔒 Sistema com dupla verificação facial
             </div>
             <LogoutButton />
           </div>

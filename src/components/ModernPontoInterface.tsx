@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
 
 interface StatusPonto {
   temEntrada: boolean
@@ -11,8 +10,11 @@ interface StatusPonto {
   horarioSaida?: string
 }
 
-export default function ModernPontoInterface() {
-  const { } = useSession()
+interface ModernPontoInterfaceProps {
+  onPontoAttempt?: (pontoData: any) => void
+}
+
+export default function ModernPontoInterface({ onPontoAttempt }: ModernPontoInterfaceProps) {
   const [status, setStatus] = useState<StatusPonto | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -76,13 +78,27 @@ export default function ModernPontoInterface() {
     setSuccess('')
 
     try {
-      // 1. Obter localização
+      // 1. Obter localização primeiro
       const position = await obterLocalizacao()
       const { latitude, longitude } = position.coords
 
       console.log('Localização obtida:', { latitude, longitude })
 
-      // 2. Registrar ponto
+      // 2. Se tem callback para verificação facial, usar
+      if (onPontoAttempt) {
+        const pontoData = {
+          tipo,
+          latitude,
+          longitude
+        }
+        
+        console.log('Enviando para verificação facial:', pontoData)
+        onPontoAttempt(pontoData)
+        setLoading(false)
+        return
+      }
+
+      // 3. Se não tem callback, registrar diretamente (modo simples)
       const response = await fetch('/api/sheets/registro-ponto', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -275,7 +291,7 @@ export default function ModernPontoInterface() {
             <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
           </svg>
           <span className="text-sm">
-            O ponto só pode ser registrado na escola
+            {onPontoAttempt ? 'Sistema com verificação facial + GPS' : 'O ponto só pode ser registrado na escola'}
           </span>
         </div>
       </div>

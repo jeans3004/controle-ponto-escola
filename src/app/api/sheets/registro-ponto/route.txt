@@ -1,0 +1,62 @@
+    const registroExistente = await getRegistroHoje(session.user.email)
+
+    if (tipo === 'entrada') {
+      if (registroExistente) {
+        return NextResponse.json({ 
+          error: 'Entrada já registrada hoje' 
+        }, { status: 400 })
+      }
+
+      // Inserir nova linha
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: process.env.GOOGLE_SHEETS_ID!,
+        range: 'registros_ponto!A:G',
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [[
+            session.user.email,
+            session.user.name,
+            data,
+            hora,
+            '', // saída vazia
+            latitude,
+            longitude
+          ]]
+        }
+      })
+
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Entrada registrada com sucesso',
+        hora 
+      })
+
+    } else if (tipo === 'saida') {
+      if (!registroExistente) {
+        return NextResponse.json({ 
+          error: 'Você precisa registrar a entrada primeiro' 
+        }, { status: 400 })
+      }
+
+      if (registroExistente.saida) {
+        return NextResponse.json({ 
+          error: 'Saída já registrada hoje' 
+        }, { status: 400 })
+      }
+
+      // Atualizar linha existente com horário de saída
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: process.env.GOOGLE_SHEETS_ID!,
+        range: `registros_ponto!E${registroExistente.rowIndex}`,
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [[hora]]
+        }
+      })
+
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Saída registrada com sucesso',
+        hora 
+      })
+    }

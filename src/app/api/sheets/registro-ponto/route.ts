@@ -114,68 +114,91 @@ export async function POST(request: NextRequest) {
       hour12: false 
     })
 
-    const registroExistente = await getRegistroHoje(session.user.email)
-
-    if (tipo === 'entrada') {
-      if (registroExistente) {
-        return NextResponse.json({ 
-          error: 'Entrada já registrada hoje' 
-        }, { status: 400 })
-      }
-
-      // Inserir nova linha
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: process.env.GOOGLE_SHEETS_ID!,
-        range: 'registros_ponto!A:G',
-        valueInputOption: 'RAW',
-        requestBody: {
-          values: [[
-            session.user.email,
-            session.user.name,
-            data,
-            hora,
-            '', // saída vazia
-            latitude,
-            longitude
-          ]]
+  const registroExistente = await getRegistroHoje(session.user.email)
+  
+      if (tipo === 'entrada') {
+        if (registroExistente) {
+          return NextResponse.json({ 
+            error: 'Entrada já registrada hoje' 
+          }, { status: 400 })
         }
-      })
 
-      return NextResponse.json({ 
-        success: true, 
-        message: 'Entrada registrada com sucesso',
-        hora 
-      })
+        // Inserir nova linha COM LINK DA FOTO
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: process.env.GOOGLE_SHEETS_ID!,
+          range: 'registros_ponto!A:H', // Expandido para incluir coluna H (foto)
+          valueInputOption: 'RAW',
+          requestBody: {
+            values: [[
+              session.user.email,
+              session.user.name,
+              data,
+              hora,
+              '', // saída vazia
+              latitude,
+              longitude,
+              body.photoLink || '' // Link da foto de verificação
+            ]]
+          }
+        })
 
-    } else if (tipo === 'saida') {
-      if (!registroExistente) {
         return NextResponse.json({ 
-          error: 'Você precisa registrar a entrada primeiro' 
-        }, { status: 400 })
+          success: true, 
+          message: 'Entrada registrada com sucesso',
+          hora 
+        })
       }
 
-      if (registroExistente.saida) {
-        return NextResponse.json({ 
-          error: 'Saída já registrada hoje' 
-        }, { status: 400 })
-      }
-
-      // Atualizar linha existente com horário de saída
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: process.env.GOOGLE_SHEETS_ID!,
-        range: `registros_ponto!E${registroExistente.rowIndex}`,
-        valueInputOption: 'RAW',
-        requestBody: {
-          values: [[hora]]
+      // Similar para saída, mas também atualizar com foto se fornecida
+      else if (tipo === 'saida') {
+        if (!registroExistente) {
+          return NextResponse.json({ 
+            error: 'Você precisa registrar a entrada primeiro' 
+          }, { status: 400 })
         }
-      })
 
-      return NextResponse.json({ 
-        success: true, 
-        message: 'Saída registrada com sucesso',
-        hora 
-      })
-    }
+        if (registroExistente.saida) {
+          return NextResponse.json({ 
+            error: 'Saída já registrada hoje' 
+          }, { status: 400 })
+        }
+
+        // Se tiver foto de saída, atualizar também a coluna H
+        if (body.photoLink) {
+          await sheets.spreadsheets.values.batchUpdate({
+            spreadsheetId: process.env.GOOGLE_SHEETS_ID!,
+            requestBody: {
+              valueInputOption: 'RAW',
+              data: [
+                {
+                  range: `registros_ponto!E${registroExistente.rowIndex}`,
+                  values: [[hora]]
+                },
+                {
+                  range: `registros_ponto!H${registroExistente.rowIndex}`,
+                  values: [[body.photoLink]]
+                }
+              ]
+            }
+          })
+        } else {
+          // Apenas atualizar horário de saída
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: process.env.GOOGLE_SHEETS_ID!,
+            range: `registros_ponto!E${registroExistente.rowIndex}`,
+            valueInputOption: 'RAW',
+            requestBody: {
+              values: [[hora]]
+            }
+          })
+        }
+
+        return NextResponse.json({ 
+          success: true, 
+          message: 'Saída registrada com sucesso',
+          hora 
+        })
+      }
 
     return NextResponse.json({ 
       error: 'Tipo de registro inválido' 

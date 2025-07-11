@@ -1,9 +1,100 @@
+'use client'
+
+import { useState } from 'react'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import ModernPontoInterface from '@/components/ModernPontoInterface'
+import FacialRecognition from '@/components/FacialRecognition'
 import LogoutButton from '@/components/LogoutButton'
-import DebugLocation from '@/components/DebugLocation'
+
+// Componente que gerencia o fluxo de verificação facial + registro de ponto
+function PontoWithFacialVerification() {
+  const [showFacialRecognition, setShowFacialRecognition] = useState(false)
+  const [pendingPontoData, setPendingPontoData] = useState<any>(null)
+  const [photoVerified, setPhotoVerified] = useState(false)
+
+  // Função chamada quando usuário tenta registrar ponto
+  const handlePontoAttempt = (pontoData: any) => {
+    setPendingPontoData(pontoData)
+    setShowFacialRecognition(true)
+  }
+
+  // Função chamada quando foto é capturada com sucesso
+  const handlePhotoSuccess = async (photoFileId: string) => {
+    setPhotoVerified(true)
+    setShowFacialRecognition(false)
+
+    // Agora registrar o ponto com o link da foto
+    try {
+      const response = await fetch('/api/sheets/registro-ponto', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...pendingPontoData,
+          photoLink: `https://drive.google.com/file/d/${photoFileId}/view`
+        })
+      })
+
+      const result = await response.json()
+      
+      if (response.ok) {
+        alert(`✅ ${result.message}`)
+        window.location.reload() // Recarregar para atualizar status
+      } else {
+        alert(`❌ ${result.error}`)
+      }
+    } catch (error) {
+      console.error('Erro ao registrar ponto:', error)
+      alert('❌ Erro ao registrar ponto')
+    }
+
+    setPendingPontoData(null)
+  }
+
+  // Função para pular verificação facial (opcional)
+  const handleSkipFacial = async () => {
+    setShowFacialRecognition(false)
+    
+    // Registrar ponto sem foto
+    try {
+      const response = await fetch('/api/sheets/registro-ponto', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pendingPontoData)
+      })
+
+      const result = await response.json()
+      
+      if (response.ok) {
+        alert(`✅ ${result.message} (sem verificação facial)`)
+        window.location.reload()
+      } else {
+        alert(`❌ ${result.error}`)
+      }
+    } catch (error) {
+      console.error('Erro ao registrar ponto:', error)
+      alert('❌ Erro ao registrar ponto')
+    }
+
+    setPendingPontoData(null)
+  }
+
+  if (showFacialRecognition) {
+    return (
+      <FacialRecognition 
+        onSuccess={handlePhotoSuccess}
+        onSkip={handleSkipFacial}
+      />
+    )
+  }
+
+  return (
+    <ModernPontoInterface 
+      onPontoAttempt={handlePontoAttempt}
+    />
+  )
+}
 
 export default async function Dashboard() {
   const session = await getServerSession(authOptions)
@@ -36,16 +127,16 @@ export default async function Dashboard() {
           </div>
         </div>
 
-        {/* Interface de Ponto */}
+        {/* Interface de Ponto com Verificação Facial */}
         <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
-          <ModernPontoInterface />
+          <PontoWithFacialVerification />
         </div>
 
         {/* Rodapé com logout */}
         <div className="bg-white rounded-2xl shadow-sm p-4">
           <div className="flex items-center justify-between">
             <div className="text-xs text-gray-500">
-              Centro de Educação Integral Christ Master
+              🔒 Sistema com verificação facial
             </div>
             <LogoutButton />
           </div>
